@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
+import 'particles.js';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import flags from 'country-flag-icons/react/3x2';
@@ -2449,7 +2450,8 @@ function PublicCardRoute({ view, isPublicLoading, error, data, settings, darkMod
   if (view === 'public-card' && data && data.personal) {
   return (
     <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture flex justify-center items-start lg:items-center p-0 lg:p-8">
-      <div className="w-full max-w-md bg-card dark:bg-card-dark min-h-screen lg:min-h-0 lg:h-auto lg:rounded-page shadow-2xl overflow-hidden relative animate-in fade-in duration-500 flex flex-col">
+      <PageParticles color={getButtonColor(data.theme?.color, settings)} darkMode={darkMode} />
+      <div className="w-full max-w-md bg-card dark:bg-card-dark min-h-screen lg:min-h-0 lg:h-auto lg:rounded-page shadow-2xl overflow-hidden relative z-[1] animate-in fade-in duration-500 flex flex-col">
         <div className="flex-1">
           <CardDisplay
             data={data}
@@ -2470,6 +2472,70 @@ function PublicCardRoute({ view, isPublicLoading, error, data, settings, darkMod
       <div className="text-text-muted-subtle dark:text-text-muted-dark">Loading...</div>
     </div>
   );
+}
+
+// Decorative particles.js layer on the page background around the card.
+// Light mode uses the card's theme colour so particles and lines stay visible on the light background.
+function PageParticles({ color, darkMode }) {
+  const containerRef = useRef(null);
+  const tagId = `page-particles-${useId().replace(/:/g, '')}`;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const particleColor = darkMode ? '#ffffff' : color;
+    let instance = null;
+
+    const destroy = () => {
+      if (!instance) return;
+      // particles.js nulls the global registry on destroy, so keep the other instances
+      const others = (window.pJSDom || []).filter(p => p !== instance);
+      instance.pJS.fn.vendors.destroypJS();
+      window.pJSDom = others;
+      instance = null;
+    };
+
+    const init = () => {
+      destroy();
+      if (!el.offsetWidth || !el.offsetHeight) return;
+      if (!window.pJSDom) window.pJSDom = [];
+      window.particlesJS(tagId, {
+        particles: {
+          number: { value: 70, density: { enable: true, value_area: 800 } },
+          color: { value: particleColor },
+          shape: { type: 'circle' },
+          opacity: { value: darkMode ? 0.5 : 0.6, random: true },
+          size: { value: 3.5, random: true },
+          line_linked: { enable: true, distance: 150, color: particleColor, opacity: darkMode ? 0.25 : 0.35, width: 1 },
+          move: { enable: !reduceMotion, speed: 1.2, direction: 'none', random: true, out_mode: 'out' }
+        },
+        // Canvas ignores pointer events so it never blocks the card buttons
+        interactivity: { events: { onhover: { enable: false }, onclick: { enable: false }, resize: false } },
+        retina_detect: true
+      });
+      instance = window.pJSDom[window.pJSDom.length - 1];
+    };
+
+    init();
+
+    // Rebuild on viewport resize
+    let resizeTimer = null;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(init, 200);
+    });
+    observer.observe(el);
+
+    return () => {
+      clearTimeout(resizeTimer);
+      observer.disconnect();
+      destroy();
+    };
+  }, [tagId, color, darkMode]);
+
+  return <div id={tagId} ref={containerRef} className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true" />;
 }
 
 function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
